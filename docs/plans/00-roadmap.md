@@ -11,7 +11,7 @@ features exist, because what you learn building 02 and 03 will change them.
 |---|---------|------|--------|
 | 0 | Deck, dealing, shuffling | [01-foundation](01-foundation.md) | done, tested |
 | 1 | Preflop hand classification | [01-foundation](01-foundation.md) | done, tested; step 4 and checkpoints open |
-| 2 | River hand-rank evaluator | [02-hand-evaluator](02-hand-evaluator.md) | empty file exists |
+| 2 | River hand-rank evaluator | [02-hand-evaluator](02-hand-evaluator.md) | adopting Senzee/Cactus Kev C evaluator; integration in progress |
 | 2a | Minimal UI: see cards, pick actions | [03-interface](03-interface.md) | static mockup exists |
 | 3 | Head-to-head equity simulator | [04-equity-simulator](04-equity-simulator.md) | empty file exists |
 | 4 | Training drills: odds, sizing, position | [05-training-drills](05-training-drills.md) | sketch only |
@@ -54,3 +54,5 @@ Dependency shape (arrows mean "needs"):
 - 2026-10-29: initial plans written.
 - 2026-10-30: plan 01 steps 1-3 done. `poker/` package created and installed editable;
   pytest and scripts run with no path configuration.
+- 2026-10-31: plan 02 rewritten. Decision to adopt Senzee's perfect-hash evaluator rather
+  than write one; plan now covers encoding, binding, 7-card loop, decode, and tests.

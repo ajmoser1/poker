@@ -1,7 +1,7 @@
 import random
 from dataclasses import dataclass
 
-
+# Card represents a single playing card. Cards are formatted as "rank" + "suit", e.g. "Q♠".
 @dataclass(frozen=True)
 class Card:
     rank: str
@@ -14,6 +14,12 @@ class Card:
 
     def __repr__(self):
         return f"{self.rank}{self.suit}"
+
+    @classmethod
+    def from_str(cls, card_str):
+        #turns "Kd" into Card('K', '♦')
+        suits_dict = {'s': '♠', 'h': '♥', 'd': '♦', 'c': '♣'}
+        return cls(card_str[0], suits_dict[card_str[1]])
 
 class Deck:
     def __init__(self):
