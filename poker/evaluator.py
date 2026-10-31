@@ -53,21 +53,17 @@ def encode(card: Card) -> int:
 # --- Scoring ------------------------------------------------------------------------
 
 
-def score5(cards: tuple[int, int, int, int, int]) -> int:
+def score5(cards: list[Card]) -> int:
     """Score five already-encoded cards. 1 best, 7462 worst."""
-    return _lib.eval_5hand_fast(*cards)
+    return _lib.eval_5hand_fast(cards[0], cards[1], cards[2], cards[3], cards[4])
 
 
-def score7(cards) -> int:
+def score7(cards: list[Card]) -> int:
     """Best 5-card score among seven Card objects.
     Encode each card, iterate every 5-card subset, keep the minimum score.
     """
-    min_score = inf
-    for subset in itertools.combinations(cards, 5):
-        score = score5(subset)
-        if score < min_score:
-            min_score = score
-    return min_score
+    encoded_cards = [encode(card) for card in cards]
+    return min(score5(combo) for combo in itertools.combinations(encoded_cards, 5))
 
 
 # --- Decoding a score into a category and a name -----------------------------------
@@ -80,12 +76,12 @@ def score7(cards) -> int:
 CATEGORY_BOUNDS = (
     (1, "Royal Flush"), 
     (10, "Straight Flush"), 
-    (167, "Four of a Kind"), 
-    (467, "Full House"), 
+    (166, "Four of a Kind"), 
+    (322, "Full House"), 
     (1599, "Flush"), 
     (1609, "Straight"), 
     (2467, "Three of a Kind"), 
-    (3222, "Two Pair"), 
+    (3325, "Two Pair"),
     (6185, "One Pair"), 
     (7462, "High Card")
 )

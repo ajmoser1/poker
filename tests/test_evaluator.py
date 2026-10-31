@@ -14,9 +14,13 @@ def _cards(spec: str):
 
 
 def test_royal_flush_scores_1():
-    royal = tuple(encode(c) for c in _cards("As Ks Qs Js Ts"))
-    assert score5(royal) == 1
+    royal = _cards("As Ks Qs Js Ts")
+    encoded_royal = [encode(card) for card in royal]
+    assert score5(encoded_royal) == 1
 
+def test_royal_flush_scores_2():
+    royal = _cards("Ah Kh Qh Jh Th 8s 5c")
+    assert score7(royal) == 1
 
 def test_worst_hand_scores_7462():
     worst = tuple(encode(c) for c in _cards("7s 5h 4d 3c 2s"))
@@ -26,6 +30,10 @@ def test_worst_hand_scores_7462():
 def test_wheel_is_the_weakest_straight():
     wheel = tuple(encode(c) for c in _cards("As 2h 3d 4c 5s"))
     assert score5(wheel) == 1609
+
+def test_score7_finds_scattered_hand():
+    scattered = _cards("Ah 8s Kh Qh 5c Jh Th")
+    assert score7(scattered) == 1
 
 
 # --- Encoder ------------------------------------------------------------------------
