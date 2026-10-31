@@ -116,5 +116,5 @@ class HandResult:
 def best_hand(cards) -> HandResult:
     """Evaluate seven Card objects."""
     score = score7(cards)
-    category = category(score)
-    return HandResult(score, category)
+    hand_category = category(score)
+    return HandResult(score, hand_category)

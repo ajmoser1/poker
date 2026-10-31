@@ -4,8 +4,9 @@ Fill in the cases from plan 02, step 5. The three below are the smoke test alrea
 by hand against the compiled library; they pin the tables and the encoder.
 """
 
-from poker.cards import Card
-from poker.evaluator import best_hand, encode, score5, score7
+from poker.cards import Card, Deck
+from poker.evaluator import best_hand, category, encode, score5, score7
+from itertools import combinations
 
 
 def _cards(spec: str):
@@ -35,6 +36,14 @@ def test_score7_finds_scattered_hand():
     scattered = _cards("Ah 8s Kh Qh 5c Jh Th")
     assert score7(scattered) == 1
 
+def test_best_hand_full_house():
+    result = best_hand(_cards("Kh Kd Ks 4c 4h 9s 2d"))
+    assert result.category == "Full House"
+
+def test_two_three_of_a_kinds():
+    result = best_hand(_cards("Kh Kd Ks 4c 4h 4s 9d"))
+    assert result.score == best_hand(_cards("Kh Kd Ks 4c 4h 2d 3c")).score
+
 
 # --- Encoder ------------------------------------------------------------------------
 # three or four cards whose integer you computed on paper. For example, what is
@@ -48,6 +57,21 @@ def test_king_of_diamonds():
 # TODO (plan 02 step 5): one per category, steel wheel, flush beaten by nothing else in
 # hand, full house vs full house, two trips, three pairs, kicker decides, exact tie.
 
+def test_all_hands_and_category_boundaries():
+    deck = Deck()
+    
+    categories_and_hands = {"Royal Flush": 0, "Straight Flush": 0, "Four of a Kind": 0, 
+                            "Full House": 0, "Flush": 0, "Straight": 0, "Three of a Kind": 0, 
+                            "Two Pair": 0, "One Pair": 0, "High Card": 0}
+    seen_scores = set()
+    encoded_deck = [encode(card) for card in deck.cards]
+    for combo in combinations(encoded_deck, 5):
+        score = score5(combo)
+        hand_category = category(score)
+        categories_and_hands[hand_category] += 1
+        seen_scores.add(score)
 
-
-# TODO (step 6): category boundaries, e.g. worst straight flush vs best quads.
+    assert categories_and_hands == {"Royal Flush": 4, "Straight Flush": 36, "Four of a Kind": 624, 
+                            "Full House": 3744, "Flush": 5108, "Straight": 10200, "Three of a Kind": 54912, 
+                            "Two Pair": 123552, "One Pair": 1098240, "High Card": 1302540}
+    assert seen_scores == set(range(1, 7463))
