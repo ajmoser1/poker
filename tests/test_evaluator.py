@@ -3,7 +3,7 @@
 Fill in the cases from plan 02, step 5. The three below are the smoke test already run
 by hand against the compiled library; they pin the tables and the encoder.
 """
-
+import pytest
 from poker.cards import Card, Deck
 from poker.evaluator import best_hand, category, encode, score5, score7
 from itertools import combinations
@@ -43,6 +43,21 @@ def test_best_hand_full_house():
 def test_two_three_of_a_kinds():
     result = best_hand(_cards("Kh Kd Ks 4c 4h 4s 9d"))
     assert result.score == best_hand(_cards("Kh Kd Ks 4c 4h 2d 3c")).score
+
+def _score7_reference(cards):
+    encoded_cards = [encode(card) for card in cards]
+    return min(score5(combo) for combo in combinations(encoded_cards, 5))
+
+def test_score7_matches_score7_reference():
+    for i in range(10000):
+        deck = Deck()
+        deck.shuffle()
+        cards = [deck.deal() for _ in range(7)]
+        assert score7(cards) == _score7_reference(cards)
+
+def test_score7_rejects_two_cards():
+    with pytest.raises(ValueError):
+        score7(_cards("Ah Kd"))
 
 
 # --- Encoder ------------------------------------------------------------------------

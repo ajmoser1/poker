@@ -1,9 +1,25 @@
 # Plan 03: Minimal interface (view cards, select actions)
 
-**Goal:** a thin screen that shows cards using the SVG assets in `cards/` and lets a
-player pick an action. It must call your Python code rather than reimplement it.
+**Goal:** a thin screen that shows cards as text and lets a player pick an action. It
+must call your Python code rather than reimplement it.
 
 **Depends on:** plan 01. Benefits from plan 02 (show the hand name).
+
+## Visual direction (decided 2026-10-31)
+
+Raw terminal / dev-log minimalism, modeled on pokerbot.sequoiacap.com, the site that
+inspired this project. Tokens and base components are in `styles.css`.
+
+- One monospace font (Source Code Pro), small sizes, uppercase labels.
+- Ink on paper, light and dark. Color only carries meaning: red suits and losses, green
+  wins, amber close calls.
+- Text is the interface: `[FOLD]` `[CALL]` bracket buttons, `=====` dividers, stats as
+  `LABEL: value` lines.
+- Cards are text in a thin box (`A♠`), not images. The SVG deck in `cards/` is no
+  longer needed for the UI.
+- 1px solid borders, square corners, no shadows, no gradients.
+
+When a screen feels cluttered, the fix is to remove something, not restyle it.
 
 ## The design decision that matters most
 

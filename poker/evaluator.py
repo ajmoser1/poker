@@ -19,13 +19,16 @@ from pathlib import Path
 from poker.cards import Card
 from math import inf
 
+
 # --- Loading the compiled evaluator -------------------------------------------------
 
 _LIB_PATH = Path(__file__).with_name("_eval.dylib")
 _lib = ctypes.CDLL(str(_LIB_PATH))
 _lib.eval_5hand_fast.restype = ctypes.c_int
 _lib.eval_5hand_fast.argtypes = [ctypes.c_int] * 5
-
+_lib.eval_7hand.restype = ctypes.c_int
+_lib.eval_7hand.argtypes = [ctypes.POINTER(ctypes.c_int)]
+IntArray7 = ctypes.c_int * 7      # a type: "array of 7 C ints"
 
 # --- Card encoding (Cactus Kev layout) ----------------------------------------------
 #
@@ -57,13 +60,13 @@ def score5(cards: list[Card]) -> int:
     """Score five already-encoded cards. 1 best, 7462 worst."""
     return _lib.eval_5hand_fast(cards[0], cards[1], cards[2], cards[3], cards[4])
 
-
-def score7(cards: list[Card]) -> int:
-    """Best 5-card score among seven Card objects.
-    Encode each card, iterate every 5-card subset, keep the minimum score.
-    """
+def score7(cards):
+    if len(cards) != 7:
+        raise ValueError("Seven cards are required to score a hand")
     encoded_cards = [encode(card) for card in cards]
-    return min(score5(combo) for combo in itertools.combinations(encoded_cards, 5))
+    arr = IntArray7(*encoded_cards)
+    score = _lib.eval_7hand(arr)
+    return score
 
 
 # --- Decoding a score into a category and a name -----------------------------------

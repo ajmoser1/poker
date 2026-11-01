@@ -36,6 +36,44 @@ int eval_5hand_fast(int c1, int c2, int c3, int c4, int c5)
     return hash_values[find_fast((c1 & 0xff) * (c2 & 0xff) * (c3 & 0xff) * (c4 & 0xff) * (c5 & 0xff))];
 }
 
+
+static const int combos7[21][5] = {
+  {0, 1, 2, 3, 4},
+  {0, 1, 2, 3, 5},
+  {0, 1, 2, 3, 6},
+  {0, 1, 2, 4, 5},
+  {0, 1, 2, 4, 6},
+  {0, 1, 2, 5, 6},
+  {0, 1, 3, 4, 5},
+  {0, 1, 3, 4, 6},
+  {0, 1, 3, 5, 6},
+  {0, 1, 4, 5, 6},
+  {0, 2, 3, 4, 5},
+  {0, 2, 3, 4, 6},
+  {0, 2, 3, 5, 6},
+  {0, 2, 4, 5, 6},
+  {0, 3, 4, 5, 6},
+  {1, 2, 3, 4, 5},
+  {1, 2, 3, 4, 6},
+  {1, 2, 3, 5, 6},
+  {1, 2, 4, 5, 6},
+  {1, 3, 4, 5, 6},
+  {2, 3, 4, 5, 6},
+};
+
+
+int eval_7hand(int *cards)
+{
+    int best = 9999;
+    for (int i = 0; i < 21; i++) {
+        int score = eval_5hand_fast(cards[combos7[i][0]], cards[combos7[i][1]], cards[combos7[i][2]], cards[combos7[i][3]], cards[combos7[i][4]]);
+        if (score < best) {
+            best = score;
+        }
+    }
+    return best;
+}
+
 unsigned short hash_adjust[] =
 {
     0, 5628, 7017, 1298, 2918, 2442, 8070, 6383, 6383, 7425, 2442, 5628, 8044, 7425, 3155, 6383, 

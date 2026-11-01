@@ -45,6 +45,20 @@ trust in code you didn't write.
    120k seven-card hands/sec with the 21-subset loop in Python. Enough for plan 04
    sampling; too slow for full preflop enumeration tables. Upgrade path if needed:
    `eval_7hand` in C so one call covers a hand.
+   **Done 2026-10-31:** `eval_7hand` added in C using a fixed table of the 21 five-of-seven
+   index combinations. Measured: Python loop 92k hands/sec, single C call 687k hands/sec.
+   The old Python loop lives on in the tests as `_score7_reference`, the answer key.
+
+## Status: complete (2026-10-31)
+
+- Encoder, 7-card scoring in C, category decoding, and `best_hand()` all work.
+- Key test: every one of the 2,598,960 five-card hands is scored; category counts match
+  the known totals and every score 1..7462 appears. Runs in about 1.5 seconds.
+- Category bounds were derived by hand: 10, 156, 156, 1277, 10, 858, 858, 2860, 1277.
+- Checkpoints answered: 7,462 classes, prime products (unique factorization), flush check
+  first for correctness, cost is the Python-to-C crossing.
+- Not done, deliberately: readable hand names ("Kings full of Fours"). Add when the
+  interface needs them.
 2. **Where the card encoding lives.** A method on `Card`, or a function in `evaluator.py`?
    The encoder is evaluator-specific; `Card` shouldn't know about Cactus Kev.
 3. **What `best_hand()` returns.** The raw int is enough for the simulator. The interface
