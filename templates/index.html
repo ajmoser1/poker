@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker Lab</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+
+  <body>
+    <main>
+      <h1>Poker Lab</h1>
+      <div class="label">TEXAS HOLD'EM · STUDY BENCH</div>
+      <div class="rule"></div>
+
+      <!-- ===== controls: above the table so they never shift when players change ===== -->
+      <div class="controls">
+        <button type="button" id="add-opponent">+ Opponent</button>
+        <button type="button" id="remove-opponent">- Opponent</button>
+        <button type="button" id="deal-hands">Deal hands</button>
+        <button type="button" id="deal-board">Deal flop</button>
+        <button type="button" id="clear">Clear</button>
+        <button type="button" id="toggle-keep-hero">Keep hero: off</button>
+        <button type="button" id="toggle-picker">Show cards</button>
+        <button type="button" id="toggle-live">Live eval: on</button>
+        <!-- auto deal: pinned to the right end of the same line -->
+        <div class="auto">
+          <span class="label" id="auto-count">HANDS DEALT: 0</span>
+          <span class="label">AUTO DEAL</span>
+          <button type="button" id="auto-play">Play</button>
+          <span class="label">SPEED</span>
+          <button type="button" class="speed" data-speed="1" aria-pressed="true">1x</button>
+          <button type="button" class="speed" data-speed="2" aria-pressed="false">2x</button>
+          <button type="button" class="speed" data-speed="4" aria-pressed="false">4x</button>
+          <button type="button" class="speed" data-speed="16" aria-pressed="false">16x</button>
+        </div>
+      </div>
+      <div id="status" class="label"></div>
+      <div class="rule dashed"></div>
+
+      <!-- ===== shared table: preflop class until the flop, then live hand evaluation ===== -->
+      <figure class="table-fig" id="table" aria-label="Table">
+        <div class="felt"></div>
+        <div id="table-content"></div>
+      </figure>
+
+      <section id="picker" class="picker" aria-label="Card picker" hidden></section>
+
+      <div class="rule"></div>
+
+      <!-- ===== panels ===== -->
+      <section class="panel">
+        <h2>A. Equity</h2>
+        <div class="label">EVERY PLAYER VS THE FIELD · PLAN 04</div>
+        <div class="muted">NOT BUILT</div>
+      </section>
+
+      <section class="panel">
+        <h2>B. Drills</h2>
+        <div class="label">POT ODDS, SIZING, POSITION · PLAN 05</div>
+        <div class="muted">NOT BUILT</div>
+      </section>
+
+      <section class="panel">
+        <h2>C. Bot</h2>
+        <div class="label">BLUEPRINT + CFR · PLAN 06</div>
+        <div class="muted">NOT BUILT</div>
+      </section>
+
+      <div class="rule"></div>
+    </main>
+
+    <script>
+      // ---------- constants ----------
+      const RANKS = "AKQJT98765432".split("");
+      const SUITS = ["s", "h", "d", "c"];
+      const SUIT_SYMBOLS = { s: "♠", h: "♥", d: "♦", c: "♣" };
+      const STREET_NAMES = { 3: "FLOP", 4: "TURN", 5: "RIVER" };
+      const MAX_OPPONENTS = 8;
+
+      // ---------- state: the single source of truth ----------
+      // Every slot is null (empty) or a two-letter card string like "Ah".
+      const table = {
+        board: [null, null, null, null, null],
+        players: [newPlayer("HERO"), newPlayer("VILLAIN 1")],
+      };
+      // The slot the next picked card goes into: { kind: "board", i } or { kind: "player", p, i }
+      let active = { kind: "player", p: 0, i: 0 };
+
+      // View options
+      let pickerOpen = false; // card grid hidden until asked for
+      let liveEval = true;    // evaluate on flop and turn too; off = river only
+      let keepHero = false;   // Clear and auto-deal leave hero's cards in place
+
+      function newPlayer(name) {
+        return { name, cards: [null, null] };
+      }
+
+      // ---------- slot helpers ----------
+      function allSlots() {
+        const slots = table.board.map((_, i) => ({ kind: "board", i }));
+        table.players.forEach((player, p) => {
+          player.cards.forEach((_, i) => slots.push({ kind: "player", p, i }));
+        });
+        return slots;
+      }
+
+      function getSlot(s) {
+        return s.kind === "board" ? table.board[s.i] : table.players[s.p].cards[s.i];
+      }
+
+      function setSlot(s, card) {
+        if (s.kind === "board") table.board[s.i] = card;
+        else table.players[s.p].cards[s.i] = card;
+      }
+
+      function sameSlot(a, b) {
+        return a && b && a.kind === b.kind && a.i === b.i && (a.kind === "board" || a.p === b.p);
+      }
+
+      function slotName(s) {
+        if (s.kind === "board") return `BOARD ${s.i + 1}`;
+        return `${table.players[s.p].name} ${s.i + 1}`;
+      }
+
+      function nextEmpty(after) {
+        const slots = allSlots();
+        const start = after ? slots.findIndex((s) => sameSlot(s, after)) + 1 : 0;
+        for (let k = 0; k < slots.length; k++) {
+          const s = slots[(start + k) % slots.length];
+          if (getSlot(s) === null) return s;
+        }
+        return null;
+      }
+
+      function usedCards() {
+        return new Set(allSlots().map(getSlot).filter((c) => c !== null));
+      }
+
+      function randomUnusedCard() {
+        const used = usedCards();
+        const pool = [];
+        for (const s of SUITS) for (const r of RANKS) if (!used.has(r + s)) pool.push(r + s);
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+
+      // ---------- what to show next to each hand ----------
+      function boardCards() {
+        return table.board.filter((c) => c !== null);
+      }
+
+      // Show the live evaluation instead of the preflop class?
+      function showPostflop() {
+        const n = boardCards().length;
+        return n >= 3 && (liveEval || n === 5);
+      }
+
+      // Indexes of players whose hand is complete; these are the ones sent to /evaluate.
+      function seatedIndexes() {
+        return table.players.map((player, p) => (player.cards.includes(null) ? -1 : p)).filter((p) => p >= 0);
+      }
+
+      function evalKey() {
+        const hands = seatedIndexes().map((p) => table.players[p].cards.join(" "));
+        return boardCards().join(" ") + " | " + hands.join(", ");
+      }
+
+      // Caches: a hand's class never changes, and neither does the result for a given table.
+      // Re-rendering on every click can then show known results immediately, without flicker.
+      const preflopCache = new Map(); // "Ah Kd" -> "PREMIUM BROADWAY"
+      const evalCache = new Map();    // evalKey() -> /evaluate response
+
+      // What a seat shows under the name: act = main line, meta = small second line,
+      // lead = this player is ahead / wins (their name is shown inverted).
+      function playerView(p) {
+        const player = table.players[p];
+        const empty = { act: "", meta: "", lead: false };
+        if (player.cards.includes(null)) return empty;
+        if (!showPostflop()) return { act: preflopCache.get(player.cards.join(" ")) ?? "", meta: "", lead: false };
+
+        const data = evalCache.get(evalKey());
+        if (!data) return empty;
+        const k = seatedIndexes().indexOf(p);
+        const result = data.results[k];
+        const lead = data.winners.includes(k);
+        let word = "";
+        if (lead) {
+          const tied = data.winners.length > 1;
+          const final = boardCards().length === 5;
+          word = final ? (tied ? "SPLIT" : "WINS") : tied ? "TIED" : "AHEAD";
+        }
+        return { act: result.category.toUpperCase(), meta: `#${result.score}${word ? " · " + word : ""}`, lead };
+      }
+
+      function streetInfo() {
+        const n = boardCards().length;
+        if (n === 0) return "PREFLOP";
+        if (n < 3) return `${n}/5`;
+        return showPostflop() ? STREET_NAMES[n] : `${STREET_NAMES[n]} · LIVE EVAL OFF`;
+      }
+
+      // ---------- rendering ----------
+      function cardText(card) {
+        return card === null ? "??" : card[0] + SUIT_SYMBOLS[card[1]];
+      }
+
+      function isRed(card) {
+        return card !== null && (card[1] === "h" || card[1] === "d");
+      }
+
+      // A table slot drawn as a playing card: rank on top, suit below.
+      function slotButton(s) {
+        const card = getSlot(s);
+        const classes = ["cd", "slot"];
+        if (card === null) classes.push("empty");
+        if (isRed(card)) classes.push("red");
+        if (sameSlot(s, active)) classes.push("active");
+        const data = `data-kind="${s.kind}" data-i="${s.i}"` + (s.kind === "player" ? ` data-p="${s.p}"` : "");
+        const face = card === null ? "" : `<span>${card[0]}</span><i>${SUIT_SYMBOLS[card[1]]}</i>`;
+        return `<button type="button" class="${classes.join(" ")}" ${data} title="${slotName(s)}" aria-label="${slotName(s)}: ${cardText(card)}">${face}</button>`;
+      }
+
+      // Seats sit evenly on an ellipse. Seat 0 (hero) is at the bottom, the rest go clockwise.
+      function seatPosition(p, count) {
+        const fig = document.getElementById("table");
+        const portrait = fig.clientHeight > fig.clientWidth;
+        const rx = portrait ? 36 : 43;
+        const ry = portrait ? 43 : 39;
+        const angle = ((90 + (p * 360) / count) * Math.PI) / 180;
+        return { left: 50 + rx * Math.cos(angle), top: 50 + ry * Math.sin(angle) };
+      }
+
+      function seatHTML(player, p) {
+        const view = playerView(p);
+        const pos = seatPosition(p, table.players.length);
+        const hole = player.cards.map((_, i) => slotButton({ kind: "player", p, i })).join("");
+        const post = showPostflop() ? " postflop" : "";
+        return `<div class="seat${view.lead ? " lead" : ""}" data-seat="${p}" style="left:${pos.left}%;top:${pos.top}%">
+          <div class="hole">${hole}</div>
+          <div class="who">${player.name}${keepHero && p === 0 ? " · KEPT" : ""}</div>
+          <div class="desc">
+            <div class="act${post}" data-act="${p}">${view.act}</div>
+            <div class="meta" data-meta="${p}">${view.meta}</div>
+          </div>
+        </div>`;
+      }
+
+      // On the river, a green line runs from the board to each winner (several on a split).
+      function winnerLines() {
+        if (boardCards().length !== 5) return "";
+        const data = evalCache.get(evalKey());
+        if (!data) return "";
+        const seated = seatedIndexes();
+        return data.winners
+          .map((k) => {
+            const pos = seatPosition(seated[k], table.players.length);
+            return `<line x1="50%" y1="50%" x2="${pos.left}%" y2="${pos.top}%" />`;
+          })
+          .join("");
+      }
+
+      function renderTable() {
+        const board = table.board.map((_, i) => slotButton({ kind: "board", i })).join("");
+        const lines = `<svg class="lines" id="winner-lines" aria-hidden="true">${winnerLines()}</svg>`;
+        const center = `<div class="center"><div class="board">${board}</div><div class="street" id="street-info">${streetInfo()}</div></div>`;
+        const seats = table.players.map(seatHTML).join("");
+        document.getElementById("table-content").innerHTML = lines + center + seats;
+      }
+
+      // Hands read high card first. A pocket pair keeps its order: no suit is preferred.
+      function sortHands() {
+        for (const player of table.players) {
+          const [a, b] = player.cards;
+          if (a !== null && b !== null && RANKS.indexOf(a[0]) > RANKS.indexOf(b[0])) {
+            player.cards = [b, a];
+            if (active && active.kind === "player" && table.players[active.p] === player) active = { ...active, i: 1 - active.i };
+          }
+        }
+      }
+
+      function renderPicker() {
+        const picker = document.getElementById("picker");
+        picker.hidden = !pickerOpen;
+        document.getElementById("toggle-picker").textContent = pickerOpen ? "Hide cards" : "Show cards";
+        if (!pickerOpen) return;
+        const used = usedCards();
+        const buttons = [];
+        for (const s of SUITS) {
+          for (const r of RANKS) {
+            const card = r + s;
+            const red = isRed(card) ? " red" : "";
+            const disabled = used.has(card) ? " disabled" : "";
+            buttons.push(`<button type="button" class="card pick${red}" data-card="${card}"${disabled}>${cardText(card)}</button>`);
+          }
+        }
+        picker.innerHTML = buttons.join("");
+      }
+
+      function renderStatus() {
+        const opponents = table.players.length - 1;
+        const where = active ? `NEXT CARD → ${slotName(active)}` : "TABLE FULL";
+        document.getElementById("status").textContent = `${where} · OPPONENTS: ${opponents} · CARDS IN USE: ${usedCards().size}/52`;
+        document.getElementById("remove-opponent").disabled = opponents <= 1;
+        document.getElementById("add-opponent").disabled = opponents >= MAX_OPPONENTS;
+        document.getElementById("toggle-live").textContent = `Live eval: ${liveEval ? "on" : "off"}`;
+        document.getElementById("toggle-keep-hero").textContent = `Keep hero: ${keepHero ? "on" : "off"}`;
+
+        // Board only after every hand is dealt, like a real deal; the button names the next street.
+        const n = boardCards().length;
+        const dealBoardButton = document.getElementById("deal-board");
+        dealBoardButton.textContent = n < 3 ? "Deal flop" : n < 4 ? "Deal turn" : "Deal river";
+        dealBoardButton.disabled = !handsComplete() || n === 5;
+        dealBoardButton.title = handsComplete() ? "" : "Deal every hand first";
+        document.getElementById("deal-hands").disabled = handsComplete();
+      }
+
+      function handsComplete() {
+        return table.players.every((player) => !player.cards.includes(null));
+      }
+
+      function render() {
+        sortHands();
+        renderTable();
+        renderPicker();
+        renderStatus();
+        updateInfo();
+      }
+
+      // ---------- server calls ----------
+      async function postJSON(url, body) {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        let data = null;
+        try {
+          data = await response.json();
+        } catch {
+          // non-JSON reply, e.g. a 404 page
+        }
+        return { status: response.status, data };
+      }
+
+      // Each render bumps this; an older, slower request that finishes late is ignored.
+      let infoRun = 0;
+
+      async function updateInfo() {
+        const run = ++infoRun;
+        if (showPostflop()) await fillPostflop(run);
+        else await fillPreflop(run);
+      }
+
+      function setPlayerInfo(p) {
+        const seat = document.querySelector(`[data-seat="${p}"]`);
+        if (!seat) return;
+        const view = playerView(p);
+        seat.querySelector(`[data-act="${p}"]`).textContent = view.act;
+        seat.querySelector(`[data-meta="${p}"]`).textContent = view.meta;
+        seat.classList.toggle("lead", view.lead);
+      }
+
+      function setPlayerError(p, message) {
+        const el = document.querySelector(`[data-act="${p}"]`);
+        if (el) el.innerHTML = `<span class="loss">${message}</span>`;
+      }
+
+      async function fillPreflop(run) {
+        await Promise.all(
+          table.players.map(async (player, p) => {
+            if (player.cards.includes(null)) return;
+            const key = player.cards.join(" ");
+            if (!preflopCache.has(key)) {
+              const { status, data } = await postJSON("/classify", { cards: player.cards });
+              if (run !== infoRun) return; // the table changed while we waited
+              if (status !== 200) {
+                setPlayerError(p, data?.error ?? "ERROR " + status);
+                return;
+              }
+              preflopCache.set(key, data.category.toUpperCase());
+            }
+            if (run === infoRun) setPlayerInfo(p);
+          })
+        );
+      }
+
+      async function fillPostflop(run) {
+        const seated = seatedIndexes();
+        if (seated.length === 0) return;
+        const key = evalKey();
+        if (!evalCache.has(key)) {
+          const { status, data } = await postJSON("/evaluate", {
+            board: boardCards(),
+            players: seated.map((p) => table.players[p].cards),
+          });
+          if (run !== infoRun) return;
+          if (status !== 200) {
+            const message = status === 404 ? "/evaluate NOT BUILT" : data?.error ?? "ERROR " + status;
+            document.getElementById("street-info").innerHTML = `${streetInfo()} · <span class="loss">${message}</span>`;
+            return;
+          }
+          if (evalCache.size > 500) evalCache.clear();
+          evalCache.set(key, data);
+        }
+        if (run !== infoRun) return;
+        seated.forEach(setPlayerInfo);
+        document.getElementById("winner-lines").innerHTML = winnerLines();
+      }
+
+      // ---------- actions ----------
+      function clickSlot(s) {
+        if (sameSlot(s, active) && getSlot(s) !== null) {
+          setSlot(s, null); // clicking the selected, filled slot clears it
+        }
+        active = s;
+        pickerOpen = true; // choosing a slot means you're about to pick a card
+        render();
+      }
+
+      function togglePicker() {
+        pickerOpen = !pickerOpen;
+        renderPicker();
+      }
+
+      function toggleLive() {
+        liveEval = !liveEval;
+        render();
+      }
+
+      function pickCard(card) {
+        if (usedCards().has(card)) return;
+        if (!active) active = nextEmpty(null);
+        if (!active) return;
+        setSlot(active, card);
+        active = nextEmpty(active);
+        render();
+      }
+
+      function dealHands() {
+        // Fill one slot at a time, so each draw sees the cards dealt just before it.
+        for (const player of table.players) {
+          for (let i = 0; i < player.cards.length; i++) {
+            if (player.cards[i] === null) player.cards[i] = randomUnusedCard();
+          }
+        }
+        active = nextEmpty(null);
+        render();
+      }
+
+      function dealBoard() {
+        if (!handsComplete()) return; // hands first, then the board
+        const filled = table.board.filter((c) => c !== null).length;
+        const target = filled < 3 ? 3 : filled < 4 ? 4 : 5; // flop, then turn, then river
+        for (let i = 0; i < target; i++) {
+          if (table.board[i] === null) table.board[i] = randomUnusedCard();
+        }
+        active = nextEmpty(null);
+        render();
+      }
+
+      function addOpponent() {
+        if (table.players.length - 1 >= MAX_OPPONENTS) return;
+        table.players.push(newPlayer(`VILLAIN ${table.players.length}`));
+        if (!active) active = nextEmpty(null); // the new player's slots are now the next empty ones
+        render();
+      }
+
+      function removeOpponent() {
+        if (table.players.length <= 2) return;
+        table.players.pop();
+        if (active && active.kind === "player" && active.p >= table.players.length) active = nextEmpty(null);
+        render();
+      }
+
+      function clearTable() {
+        table.board = table.board.map(() => null);
+        table.players.forEach((player, p) => {
+          if (keepHero && p === 0) return; // hero's hand survives the clear
+          player.cards = [null, null];
+        });
+        // Next card goes to the first empty hand slot (hero's, unless hero is kept and complete).
+        active = allSlots().find((s) => s.kind === "player" && getSlot(s) === null) ?? null;
+        render();
+      }
+
+      function toggleKeepHero() {
+        keepHero = !keepHero;
+        render();
+      }
+
+      // ---------- auto deal ----------
+      // Each tick deals the next step: hands, flop, turn, river. The tick after the river
+      // clears the table and deals fresh hands. 1x = one second per tick.
+      let autoTimer = null;
+      let autoSpeed = 1;
+      let handsDealt = 0;
+
+      function autoStep() {
+        const n = boardCards().length;
+        if (n === 5) {
+          clearTable();
+          dealHands();
+          handsDealt++;
+        } else if (!handsComplete()) {
+          if (n === 0) handsDealt++;
+          dealHands();
+        } else {
+          dealBoard();
+        }
+        renderAuto();
+      }
+
+      function scheduleAuto() {
+        autoTimer = setTimeout(() => {
+          autoStep();
+          scheduleAuto();
+        }, 1000 / autoSpeed);
+      }
+
+      function stopAuto() {
+        clearTimeout(autoTimer);
+        autoTimer = null;
+      }
+
+      function toggleAuto() {
+        if (autoTimer) {
+          stopAuto();
+        } else {
+          autoStep(); // first step right away, then one per tick
+          scheduleAuto();
+        }
+        renderAuto();
+      }
+
+      function setSpeed(speed) {
+        autoSpeed = speed;
+        if (autoTimer) {
+          stopAuto();
+          scheduleAuto(); // apply the new speed from now
+        }
+        renderAuto();
+      }
+
+      function renderAuto() {
+        document.getElementById("auto-play").textContent = autoTimer ? "Pause" : "Play";
+        document.querySelectorAll(".speed").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.speed) === autoSpeed)));
+        document.getElementById("auto-count").textContent = `HANDS DEALT: ${handsDealt}`;
+      }
+
+      document.getElementById("auto-play").addEventListener("click", toggleAuto);
+      document.querySelectorAll(".speed").forEach((b) => b.addEventListener("click", () => setSpeed(Number(b.dataset.speed))));
+
+      // ---------- wiring ----------
+      document.addEventListener("click", (event) => {
+        const slot = event.target.closest(".slot");
+        if (slot) {
+          const s = { kind: slot.dataset.kind, i: Number(slot.dataset.i) };
+          if (s.kind === "player") s.p = Number(slot.dataset.p);
+          clickSlot(s);
+          return;
+        }
+        const pick = event.target.closest(".pick");
+        if (pick) pickCard(pick.dataset.card);
+      });
+
+      document.getElementById("add-opponent").addEventListener("click", addOpponent);
+      document.getElementById("remove-opponent").addEventListener("click", removeOpponent);
+      document.getElementById("deal-hands").addEventListener("click", dealHands);
+      document.getElementById("deal-board").addEventListener("click", dealBoard);
+      document.getElementById("clear").addEventListener("click", clearTable);
+      document.getElementById("toggle-keep-hero").addEventListener("click", toggleKeepHero);
+      document.getElementById("toggle-picker").addEventListener("click", togglePicker);
+      document.getElementById("toggle-live").addEventListener("click", toggleLive);
+
+      // The table switches to a tall ellipse on narrow screens; re-place the seats when that happens.
+      let lastPortrait = null;
+      window.addEventListener("resize", () => {
+        const fig = document.getElementById("table");
+        const portrait = fig.clientHeight > fig.clientWidth;
+        if (portrait !== lastPortrait) {
+          lastPortrait = portrait;
+          renderTable();
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>

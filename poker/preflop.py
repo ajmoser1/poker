@@ -31,6 +31,8 @@ def evaluate_hand(hand):
         return "Pair"
     if hand_code in {"AKs", "AKo", "AQs", "AQo", "AJs", "KQs"}:
         return "Premium Broadway"
+    if hand_code in {"KQo", "KJs", "KJo", "QJs", "QJo", "JTs"}:
+        return "Broadway"
     if suited and high_rank == 'A' and low_rank in "23456789T":
         return "Suited Ace"
     if suited and gap == 0:

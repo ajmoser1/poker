@@ -12,8 +12,8 @@ features exist, because what you learn building 02 and 03 will change them.
 | 0 | Deck, dealing, shuffling | [01-foundation](01-foundation.md) | done, tested |
 | 1 | Preflop hand classification | [01-foundation](01-foundation.md) | done, tested; step 4 and checkpoints open |
 | 2 | River hand-rank evaluator | [02-hand-evaluator](02-hand-evaluator.md) | done: Senzee/Cactus Kev C evaluator via ctypes, 7-card in C, ~690k hands/sec |
-| 2a | Minimal UI: see cards, pick actions | [03-interface](03-interface.md) | static mockup exists |
-| 3 | Head-to-head equity simulator | [04-equity-simulator](04-equity-simulator.md) | empty file exists |
+| 2a | Minimal UI: see cards, pick actions | [03-interface](03-interface.md) | done: Flask app, oval table, live eval, auto-deal; action bar moved to plan 05 |
+| 3 | Equity simulator (multiway) | [04-equity-simulator](04-equity-simulator.md) | started 2026-11-01; empty simulator.py exists |
 | 4 | Training drills: odds, sizing, position | [05-training-drills](05-training-drills.md) | sketch only |
 | 5 | Pokerbot: blueprint + CFR | [06-pokerbot](06-pokerbot.md) | sketch only |
 
@@ -58,3 +58,7 @@ Dependency shape (arrows mean "needs"):
   than write one; plan now covers encoding, binding, 7-card loop, decode, and tests.
 - 2026-10-31: plan 02 complete. 7-card loop moved into C (7.5x faster). Exhaustive
   five-card test verifies encoder, tables, and category bounds.
+- 2026-10-31: plan 03 working. `/classify` and `/evaluate` built and tested (49 tests).
+  Front end (HTML/CSS/JS) is written by Claude; Python is the user's.
+- 2026-11-01: plan 03 done (60 tests). Plan 04 revised: multiway from the start, because
+  the table already seats up to 9 players.

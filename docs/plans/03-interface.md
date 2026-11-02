@@ -21,6 +21,80 @@ inspired this project. Tokens and base components are in `styles.css`.
 
 When a screen feels cluttered, the fix is to remove something, not restyle it.
 
+## Page structure (decided 2026-10-31)
+
+One page. A shared **table** at the top, then stacked feature panels that read from it.
+
+```
+POKER LAB
+========================================
+[+ OPPONENT] [- OPPONENT] [DEAL HANDS] [DEAL BOARD] [CLEAR] [SHOW CARDS] [LIVE EVAL: ON]
+NEXT CARD → BOARD 1 · OPPONENTS: 2 · CARDS IN USE: 11/52
+----------------------------------------
+BOARD      2♣ 8♥ 5♥ 5♠ Q♦   RIVER
+----------------------------------------
+HERO       A♠ Q♥   TWO PAIR #2787 WINS
+VILLAIN 1  A♣ K♣   ONE PAIR #5306
+----------------------------------------
+card picker (hidden until opened): 52 text cards, 4 x 13, used cards greyed out
+========================================
+A. EQUITY    every player vs the field          /equity     (plan 04)
+B. DRILLS                                                   (plan 05)
+C. BOT                                                      (plan 06)
+```
+
+Update: the table is now an oval modeled on Sequoia's Exhibit A. The board sits in the
+center; seats are spaced evenly on an ellipse, hero at bottom center, opponents clockwise.
+Hands display high card first; a pocket pair keeps its dealt suit order.
+
+Each seat shows the preflop class (`/classify`) until the flop, then the live
+evaluation (`/evaluate`) replaces it on every street. Live eval off means preflop class
+until the river. Buttons sit above the table so they don't move as players are added.
+
+- Board on its own line, above the players.
+- Opponents can be added and removed. This makes the table multiway, which plan 04's
+  equity has to handle (ties split among several players).
+- Random deal fills the empty slots without touching cards already placed.
+- Cards travel as two-letter strings (`"Ah"`) between page and server; only display code
+  turns them into symbols.
+- Assumption: card picker is a clickable grid, not dropdowns. Change here if not.
+
+Build order: table display, card picker, random deal and opponents, then rewire the
+preflop panel to read from the table, then the river panel.
+
+**Status 2026-11-01: done.** Front end by Claude (HTML/CSS/JS); Python by the user.
+Oval table, picker, deal hands, deal board by street, 1 to 8 opponents, clear, keep hero,
+live eval on every street, winner line, auto-deal at 1x/2x/4x/16x. `/classify` and
+`/evaluate` built and tested. Two steps changed on purpose:
+
+- Step 4 (SVG card images) dropped. Cards are text, per the visual direction.
+- Step 5 (action bar) moved to plan 05. Recording actions means nothing without a betting
+  engine, so it gets built with one.
+
+## `/evaluate` contract (the page already sends and expects this)
+
+Request:
+```json
+{"board": ["Qc", "3h", "Qh", "2c", "Kc"],
+ "players": [["As", "Kd"], ["Qs", "2h"], ["5s", "7d"]]}
+```
+
+Response 200:
+```json
+{"results": [{"score": 2468, "category": "Two Pair"}, ...],
+ "winners": [1]}
+```
+
+- `results[k]` lines up with `players[k]`.
+- `winners` holds every index tied for the best score. More than one index means a split.
+- Lower score wins. That rule lives here on the server, not in the page.
+- Bad input returns 400 with `{"error": "..."}`, same as `/classify`: board not exactly 5,
+  a player without exactly 2, unparseable cards.
+- Known gap, accepted 2026-10-31: `/evaluate` trusts the page to send no duplicate cards
+  across the table and at least one player. The page guarantees both. A hand-made request
+  (curl) can still get a wrong answer or a 500. Revisit if anything other than this page
+  starts calling the server (the simulator, the bot).
+
 ## The design decision that matters most
 
 The current `ui.html` contains a JavaScript copy of the preflop classifier. That's the

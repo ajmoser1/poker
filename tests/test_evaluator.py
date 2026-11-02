@@ -5,7 +5,7 @@ by hand against the compiled library; they pin the tables and the encoder.
 """
 import pytest
 from poker.cards import Card, Deck
-from poker.evaluator import best_hand, category, encode, score5, score7
+from poker.evaluator import best_hand, best_score, category, encode, score5, score7
 from itertools import combinations
 
 
@@ -77,7 +77,7 @@ def test_all_hands_and_category_boundaries():
     
     categories_and_hands = {"Royal Flush": 0, "Straight Flush": 0, "Four of a Kind": 0, 
                             "Full House": 0, "Flush": 0, "Straight": 0, "Three of a Kind": 0, 
-                            "Two Pair": 0, "One Pair": 0, "High Card": 0}
+                            "Two Pair": 0, "Pair": 0, "High Card": 0}
     seen_scores = set()
     encoded_deck = [encode(card) for card in deck.cards]
     for combo in combinations(encoded_deck, 5):
@@ -88,5 +88,38 @@ def test_all_hands_and_category_boundaries():
 
     assert categories_and_hands == {"Royal Flush": 4, "Straight Flush": 36, "Four of a Kind": 624, 
                             "Full House": 3744, "Flush": 5108, "Straight": 10200, "Three of a Kind": 54912, 
-                            "Two Pair": 123552, "One Pair": 1098240, "High Card": 1302540}
+                            "Two Pair": 123552, "Pair": 1098240, "High Card": 1302540}
     assert seen_scores == set(range(1, 7463))
+
+# --- best_score: 5, 6, or 7 cards ---------------------------------------------------
+
+def test_best_score_five_cards():
+    assert best_score(_cards("As Ks Qs Js Ts")) == 1
+    assert best_score(_cards("7s 5h 4d 3c 2s")) == 7462
+
+
+def test_best_score_six_cards_finds_best_subset():
+    assert best_score(_cards("9h As Ks Qs Js Ts")) == 1
+
+
+def test_best_score_seven_cards_matches_score7():
+    cards = _cards("Ah 8s Kh Qh 5c Jh Th")
+    assert best_score(cards) == score7(cards) == 1
+
+
+def test_best_score_matches_reference_on_random_hands():
+    for n in (5, 6, 7):
+        for _ in range(2000):
+            deck = Deck()
+            deck.shuffle()
+            cards = [deck.deal() for _ in range(n)]
+            encoded = [encode(c) for c in cards]
+            expected = min(score5(combo) for combo in combinations(encoded, 5))
+            assert best_score(cards) == expected
+
+
+@pytest.mark.parametrize("n", [0, 4, 8])
+def test_best_score_rejects_wrong_card_count(n):
+    cards = _cards("As Ks Qs Js Ts 9s 8s 7s")[:n]
+    with pytest.raises(ValueError):
+        best_score(cards)

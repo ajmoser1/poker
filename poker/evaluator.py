@@ -56,9 +56,11 @@ def encode(card: Card) -> int:
 # --- Scoring ------------------------------------------------------------------------
 
 
+
 def score5(cards: list[Card]) -> int:
     """Score five already-encoded cards. 1 best, 7462 worst."""
     return _lib.eval_5hand_fast(cards[0], cards[1], cards[2], cards[3], cards[4])
+
 
 def score7(cards):
     if len(cards) != 7:
@@ -67,6 +69,16 @@ def score7(cards):
     arr = IntArray7(*encoded_cards)
     score = _lib.eval_7hand(arr)
     return score
+
+def best_score(cards: list[Card]) -> int:
+    if len(cards) not in range(5, 8):
+        raise ValueError("Five to seven cards are required to score a hand")
+    if len(cards) == 7:
+        return score7(cards)
+    encoded_cards = [encode(card) for card in cards]
+    combinations = itertools.combinations(encoded_cards, 5)
+    scores = [score5(combination) for combination in combinations]
+    return min(scores)
 
 
 # --- Decoding a score into a category and a name -----------------------------------
@@ -85,7 +97,7 @@ CATEGORY_BOUNDS = (
     (1609, "Straight"), 
     (2467, "Three of a Kind"), 
     (3325, "Two Pair"),
-    (6185, "One Pair"), 
+    (6185, "Pair"), 
     (7462, "High Card")
 )
 
